@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    schema: 规范，对xml文件的规定
+ -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                          http://www.springframework.org/schema/beans/spring-beans.xsd
+                          http://www.springframework.org/schema/aop
+                          http://www.springframework.org/schema/aop/spring-aop.xsd
+                          http://www.springframework.org/schema/context
+                          http://www.springframework.org/schema/context/spring-context.xsd
+                          http://www.springframework.org/schema/tx
+                          http://www.springframework.org/schema/tx/spring-tx.xsd
+                        ">
+
+    <!--读取配置文件-->
+    <context:property-placeholder location="classpath:jdbc.properties"/>
+    <!--把mybatis的数据源和连接池换为Druid-->
+    <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <!--基本配置-->
+        <property name="driverClassName" value="${jdbc.driver}" />
+        <property name="url" value="${jdbc.url}" />
+        <property name="username" value="${jdbc.username}" />
+        <property name="password" value="${jdbc.password}" />
+
+        <!--配置初始化大小，最小、最大-->
+        <property name="initialSize" value="${jdbc.init}"/>
+        <property name="minIdle" value="${jdbc.minIdle}"/>
+        <property name="maxActive" value="${jdbc.maxActive}"/>
+
+        <!--超时等待时间毫秒-->
+        <property name="maxWait" value="60000"/>
+        <!--配置隔多长时间进行一次检测，检测需要关闭的空闲连接，单位是毫秒-->
+        <property name="timeBetweenEvictionRunsMillis" value="60000"/>
+        <!--配置一个连接在池中的最小生存时间，单位是毫秒-->
+        <property name="minEvictableIdleTimeMillis" value="300000"/>
+    </bean>
+
+<!--    生产sqlSessionFactory-->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <!--注入连接池-->
+        <property name="dataSource" ref="dataSource"></property>
+        <!--注入dao-mapper文件信息，如果映射文件和dao接口同包且同名，则此配置可以省略-->
+        <property name="mapperLocations">
+            <list>
+                <value>classpath:com/liusheng/dao/*.xml</value>
+            </list>
+        </property>
+        <!--为dao-mapper文件中的实体类定义缺省包路径-->
+        <property name="typeAliasesPackage" value="com.liusheng.entity"></property>
+    </bean>
+
+    <!--工厂会去构成dao接口的实现类，id为首字母小写的接口userDao-->
+    <bean id="mapperScannerConfigure" class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <!--dao接口所在的包，如果有多个包，可以使用逗号或分号分隔-->
+        <property name="basePackage" value="com.liusheng.dao"></property>
+        <!--如果工厂中只有一个SqlSessionFactory的bean，此配置可以省略-->
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"></property>
+    </bean>
+
+    <!--service-->
+<!--    <bean id="userService" class="com.liusheng.service.UserServiceImpl">-->
+<!--        &lt;!&ndash;这里的ref指向工厂对dao接口创建的实现类&ndash;&gt;-->
+<!--        <property name="userDao" ref="userDao"></property>-->
+<!--    </bean>-->
+
+    <!--引入一个事务管理器，其中依赖DataSource，借以获得连接池，进而控制事务-->
+    <bean id="tx" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <!--SqlSessionFactory和事务管理器必须注入同一个DataSource，否则事务控制失败-->
+        <property name="dataSource" ref="dataSource"></property>
+    </bean>
+
+    <!--事务通知，使用aop代理对service进行事务控制，spring中有已经存在的相关类-->
+<!--    <tx:advice id="txManger" transaction-manager="tx">-->
+<!--        <tx:attributes>-->
+<!--            &lt;!&ndash;以User结尾的方法，切入此方法时，匹配的方法发生异常时进行回滚&ndash;&gt;-->
+<!--            <tx:method name="*User" rollback-for="Exception" />-->
+<!--            <tx:method name="queryUsers" propagation="SUPPORTS" />-->
+<!--            &lt;!&ndash;除了上述匹配的剩下的所有方法&ndash;&gt;-->
+<!--            <tx:method name="*" />-->
+<!--        </tx:attributes>-->
+<!--    </tx:advice>-->
+
+    <!--把通知代理切入到具体的service方法上-->
+<!--    <aop:config>-->
+<!--        <aop:pointcut id="pc_tx" expression="execution(* com.liusheng.service.UserServiceImpl.*(..))"/>-->
+<!--        <aop:advisor advice-ref="txManger" pointcut-ref="pc_tx"/>-->
+<!--    </aop:config>-->
+
+    <!--告诉Spring，我们在项目哪里使用了相关注解，包路径-->
+    <context:component-scan base-package="com.liusheng"></context:component-scan>
+    <!--这个配置是使用@Transactional需要的-->
+    <tx:annotation-driven transaction-manager="tx"/>
+
+    <!--启用aop注解（自己写了切面类）-->
+    <aop:aspectj-autoproxy></aop:aspectj-autoproxy>
+</beans>

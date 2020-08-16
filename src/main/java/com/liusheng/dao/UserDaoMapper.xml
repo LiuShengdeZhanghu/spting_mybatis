@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="GBK"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.liusheng.dao.UserDao">
+
+<!--    <cache></cache>-->
+    <!--开启UserDao的二级缓存-->
+
+    <sql id="all_field">
+        select * from user
+    </sql>
+
+    <!--    id是唯一标识，type是要封装的对象类型-->
+    <resultMap id="user_resultMap" type="User">
+        <!--        定制更复杂的映射规则，当数据库中的字段和实体类字段完全一致时，可以不写这个映射规则
+        column是数据库中的字段，property是java实体类的属性，外键关联查询需要使用这个来配置映射规则-->
+        <id column="id" property="id"></id>
+        <result column="password" property="password"></result>
+        <result column="last_login" property="last_login"></result>
+        <result column="username" property="username"></result>
+        <result column="email" property="email"></result>
+        <result column="is_staff" property="is_staff"></result>
+        <result column="is_active" property="is_active"></result>
+        <result column="date_joined" property="date_joined"></result>
+        <result column="gender" property="gender"></result>
+        <result column="avatar" property="avatar"></result>
+        <!--    在这里需要描述联合查询出的结果怎么映射到关联属性对象的属性上    -->
+        <association property="passport" javaType="Passport">
+            <!--        把联合查询结果中的passport.id值，赋给Passport对象的id   -->
+            <id column="passport.id" property="id"></id>
+            <result column="nationality" property="nationality"></result>
+            <result column="expire" property="expire"></result>
+            <result column="user_id" property="user_id"></result>
+        </association>
+    </resultMap>
+
+    <select id="queryUsers" resultType="User">
+        <include refid="all_field"></include>
+    </select>
+
+    <!--    描述接口中的方法，id为接口中方法的名称，resultType为方法返回类型，
+    #{arg0}表示方法中第一个参数-->
+    <select id="queryUserById" resultType="User">
+        <include refid="all_field"/>
+        where id = #{id}
+    </select>
+
+    <!--    联合查询-->
+    <select id="queryUserPassportById" resultMap="user_resultMap">
+        select user.*,passport.* from user join passport on user.id=passport.user_id where user.id = #{id}
+    </select>
+
+
+
+    <!--    虽然方法中定义的返回值为集合，但是这里只需要写集合中的类型，使用mysql提供的concat拼接模糊查询的语句-->
+    <select id="queryUserByLikeUsername" resultType="User">
+        <include refid="all_field"/>
+        where username like concat('%',#{username},'%')
+    </select>
+
+    <delete id="deleteUserById" parameterType="int">
+        delete from user where id = #{id}
+    </delete>
+
+    <update id="updateUser" parameterType="User">
+        update user
+        <!--
+            1、补充set关键词
+            2、自动将set子句的,去掉
+        -->
+        <set>
+            <if test="username!=null">username=#{username},</if>
+            <if test="password!=null">password=#{password},</if>
+            <if test="email!=null">email=#{email}</if>
+            <if test="is_active!=null">is_active=#{is_active},</if>
+            <if test="gender!=null">gender=#{gender},</if>
+            <if test="last_login!=null">last_login=#{last_login}</if>
+        </set>
+        where id=#{id}
+    </update>
+
+    <!--    插入时，如果主键是自增的，则可以设置为null，数据库自己去设置主键值-->
+    <insert id="insertUser" parameterType="User">
+        --         主键回填，把新数据的ID，存入java对象和主键对应的属性中
+        <selectKey order="AFTER" resultType="int" keyProperty="id">
+            select last_insert_id()
+        </selectKey>
+        insert into user values(null ,#{password},#{last_login},#{username},#{email},#{is_staff},
+        #{is_active},#{date_joined},#{gender},#{avatar})
+    </insert>
+
+
+    <resultMap id="user_topic" type="User">
+        <id column="id" property="id"></id>
+        <result column="password" property="password"></result>
+        <result column="last_login" property="last_login"></result>
+        <result column="username" property="username"></result>
+        <result column="email" property="email"></result>
+        <result column="is_staff" property="is_staff"></result>
+        <result column="is_active" property="is_active"></result>
+        <result column="date_joined" property="date_joined"></result>
+        <result column="gender" property="gender"></result>
+        <result column="avatar" property="avatar"></result>
+
+        <collection property="topics" javaType="list" ofType="Topic">
+            <id column="tid" property="id"></id>
+            <result column="name" property="name"></result>
+            <result column="site_url" property="site_url"></result>
+        </collection>
+    </resultMap>
+
+    <!--    当查询出的结果集中，关联属性有多个值的时候，要保证本表的id名称不变-->
+    <select id="queryUserTopicById" resultMap="user_topic">
+        select user.*, topic.id tid, topic.name, topic.site_url from user join user_topic
+        on user.id = user_topic.user_id join topic
+        on user_topic.topic_id = topic.id where user.id = #{id}
+    </select>
+
+
+
+    <delete id="deleteManyUser" parameterType="java.util.List">
+        --         delete from user where id in (x,x,x,x)
+        delete from user where id in
+        <!--会循环迭代参数列表，拼接为SQL的字符串-->
+        <foreach collection="list" open="(" close=")" item="id" separator=",">
+            #{id}
+        </foreach>
+    </delete>
+
+    <insert id="insertManyUser" parameterType="java.util.List">
+        <!--insert into user (x,x,x,x),(x,x,x,x)-->
+        insert into user values
+        <!--使用foreach遍历user列表，进行批量插入-->
+        <foreach collection="list" item="user1" separator=",">
+            (null ,#{user1.password},#{user1.last_login},#{user1.username},
+            #{user1.email},#{user1.is_staff},#{user1.is_active},#{user1.date_joined},
+            #{user1.gender} ,#{user1.avatar})
+        </foreach>
+    </insert>
+</mapper>
